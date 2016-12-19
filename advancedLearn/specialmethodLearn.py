@@ -53,3 +53,76 @@ class Student(object):
 
 L = [Student('Tim', 99), Student('Bob', 88), Student('Alice', 99)]
 print sorted(L)
+
+#斐波那契数列
+class Fib(object):
+
+    def __init__(self, num):
+        listnum = []
+        a = 0
+        #lnum = 0
+        b = 1
+        #sumnum = 1
+
+        for i in range(num):
+            #listnum.append(lnum)
+            listnum.append(a)
+            #sumnum = sunnum + lnum
+
+            #lnum = sumnum
+            t = a
+            a = b
+            b = t + b
+            #a, b = b, a + b
+
+            self.number = listnum
+
+    def __str__(self):
+        return str(self.number)
+
+    __repr__ = __str__
+
+    def __len__(self):
+        return len(self.number)
+
+f = Fib(10)
+print f
+print len(f)
+
+#有理数
+
+#最大公因数解法：辗转相除法，递归实现
+def gcd(a, b):
+    if b == 0:
+        return a
+    return gcd(b, a % b)
+
+class Rational(object):
+    def __init__(self, p, q):
+        self.p = p
+        self.q = q
+
+    def __add__(self, r):
+        return Rational(self.p * r.q + self.q * r.p, self.q * r.q)
+
+    def __sub__(self, r):
+        return Rational(self.p * r.q - self.q * r.p, self.q * r.q)
+
+    def __mul__(self, r):
+        return Rational(self.p * r.p, self.q * r.q)
+
+    def __div__(self, r):
+        return Rational(self.p * r.q, self.q * r.p)
+
+    def __str__(self):
+        g = gcd(self.p, self.q)
+        return '%s/%s' % (self.p / g, self.q / g)
+
+    __repr__ = __str__
+
+r1 = Rational(1, 2)
+r2 = Rational(1, 4)
+print r1 + r2
+print r1 - r2
+print r1 * r2
+print r1 / r2
