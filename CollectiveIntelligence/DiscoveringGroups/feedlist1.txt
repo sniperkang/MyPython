@@ -1,3 +1,0 @@
-http://guykawasaki.com/feed/rdf/
-http://blogoscoped.com/rss.xml
-http://feeds.gawker.com/gizmodo/full

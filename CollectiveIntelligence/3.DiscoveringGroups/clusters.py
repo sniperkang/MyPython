@@ -254,11 +254,26 @@ def rotatematrix(data):
 
 import random
 
+# K-均值聚类
+# 随机确定k个中心位置，将数据项分配给最邻近的中心点
+# 分配后，聚类中心移动到其下属节点的平均位置
+# 重复过程直到分配不再变化
 def kcluster(rows,distance=pearson,k=4):
+  # 确定每个点的最小值和最大值
   # Determine the minimum and maximum values for each point
+
+#  for i in range(len(rows)):
+#    print rows[i]
+
+#  for i in range(len(rows[0])):
+#    for row in rows:
+#      print row[i]
+
   ranges=[(min([row[i] for row in rows]),max([row[i] for row in rows])) 
   for i in range(len(rows[0]))]
+  #print ranges
 
+  # 随机创建k个中心点
   # Create k randomly placed centroids
   clusters=[[random.random()*(ranges[i][1]-ranges[i][0])+ranges[i][0] 
   for i in range(len(rows[0]))] for j in range(k)]
@@ -267,20 +282,26 @@ def kcluster(rows,distance=pearson,k=4):
   for t in range(100):
     print 'Iteration %d' % t
     bestmatches=[[] for i in range(k)]
-    
+
+    # 在每一行中寻找距离最近的中心点
     # Find which centroid is the closest for each row
     for j in range(len(rows)):
       row=rows[j]
+      #print row
       bestmatch=0
       for i in range(k):
+        #print clusters[i]
         d=distance(clusters[i],row)
         if d<distance(clusters[bestmatch],row): bestmatch=i
       bestmatches[bestmatch].append(j)
+      #print bestmatches
 
+    # 如果结果与上一次相同，则整个过程结束
     # If the results are the same as last time, this is complete
     if bestmatches==lastmatches: break
     lastmatches=bestmatches
-    
+
+    # 把中心点移动到其所有成员的平均位置处
     # Move the centroids to the average of their members
     for i in range(k):
       avgs=[0.0]*len(rows[0])
