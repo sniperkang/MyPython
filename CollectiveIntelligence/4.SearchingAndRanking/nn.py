@@ -1,3 +1,5 @@
+#-*- coding: utf-8 -*-
+
 from math import tanh
 from pysqlite2 import dbapi2 as sqlite
 
@@ -7,7 +9,7 @@ def dtanh(y):
 class searchnet:
     def __init__(self,dbname):
       self.con=sqlite.connect(dbname)
-  
+
     def __del__(self):
       self.con.close()
 
@@ -17,27 +19,32 @@ class searchnet:
       self.con.execute('create table hiddenurl(fromid,toid,strength)')
       self.con.commit()
 
+    # 判断当前连接的强度
     def getstrength(self,fromid,toid,layer):
       if layer==0: table='wordhidden'
       else: table='hiddenurl'
       res=self.con.execute('select strength from %s where fromid=%d and toid=%d' % (table,fromid,toid)).fetchone()
-      if res==None: 
+      if res==None:
           if layer==0: return -0.2
           if layer==1: return 0
       return res[0]
 
+    # 判断连接是否已存在 并利用新强度值更新连接或创建连接
+    # 用以训练神经网络
     def setstrength(self,fromid,toid,layer,strength):
       if layer==0: table='wordhidden'
       else: table='hiddenurl'
       res=self.con.execute('select rowid from %s where fromid=%d and toid=%d' % (table,fromid,toid)).fetchone()
-      if res==None: 
+      if res==None:
         self.con.execute('insert into %s (fromid,toid,strength) values (%d,%d,%f)' % (table,fromid,toid,strength))
       else:
         rowid=res[0]
         self.con.execute('update %s set strength=%f where rowid=%d' % (table,strength,rowid))
 
+    # 为未见过的单词组合 生成新的隐藏层节点
     def generatehiddennode(self,wordids,urls):
       if len(wordids)>3: return None
+      # 检查我们是否已经为这组单词建好了一个节点
       # Check if we already created a node for this set of words
       sorted_words=[str(id) for id in wordids]
       sorted_words.sort()
@@ -45,11 +52,13 @@ class searchnet:
       res=self.con.execute(
       "select rowid from hiddennode where create_key='%s'" % createkey).fetchone()
 
+      # 如果没有 则建立之
       # If not, create it
       if res==None:
         cur=self.con.execute(
         "insert into hiddennode (create_key) values ('%s')" % createkey)
         hiddenid=cur.lastrowid
+        # 设置默认权重
         # Put in some default weights
         for wordid in wordids:
           self.setstrength(wordid,hiddenid,0,1.0/len(wordids))
@@ -57,6 +66,7 @@ class searchnet:
           self.setstrength(hiddenid,urlid,1,0.1)
         self.con.commit()
 
+    # 查询出节点于连接的信息 并在内存中建立起与某项查询相关的部分网络
     def getallhiddenids(self,wordids,urlids):
       l1={}
       for wordid in wordids:
@@ -69,23 +79,24 @@ class searchnet:
         for row in cur: l1[row[0]]=1
       return l1.keys()
 
+    # 在内存中建立起与某项查询相关的部分网络
     def setupnetwork(self,wordids,urlids):
         # value lists
         self.wordids=wordids
         self.hiddenids=self.getallhiddenids(wordids,urlids)
         self.urlids=urlids
- 
+
         # node outputs
         self.ai = [1.0]*len(self.wordids)
         self.ah = [1.0]*len(self.hiddenids)
         self.ao = [1.0]*len(self.urlids)
-        
+
         # create weights matrix
-        self.wi = [[self.getstrength(wordid,hiddenid,0) 
-                    for hiddenid in self.hiddenids] 
+        self.wi = [[self.getstrength(wordid,hiddenid,0)
+                    for hiddenid in self.hiddenids]
                    for wordid in self.wordids]
-        self.wo = [[self.getstrength(hiddenid,urlid,1) 
-                    for urlid in self.urlids] 
+        self.wo = [[self.getstrength(hiddenid,urlid,1)
+                    for urlid in self.urlids]
                    for hiddenid in self.hiddenids]
 
     def feedforward(self):
@@ -140,11 +151,11 @@ class searchnet:
                 change = hidden_deltas[j]*self.ai[i]
                 self.wi[i][j] = self.wi[i][j] + N*change
 
-    def trainquery(self,wordids,urlids,selectedurl): 
+    def trainquery(self,wordids,urlids,selectedurl):
       # generate a hidden node if necessary
       self.generatehiddennode(wordids,urlids)
 
-      self.setupnetwork(wordids,urlids)      
+      self.setupnetwork(wordids,urlids)
       self.feedforward()
       targets=[0.0]*len(urlids)
       targets[urlids.index(selectedurl)]=1.0

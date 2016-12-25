@@ -355,6 +355,7 @@ class searcher:
     normalizedscores=dict([(u,float(l)/maxrank) for (u,l) in pageranks.items()])
     return normalizedscores
 
+  # 神经网络评价算法
   def nnscore(self,rows,wordids):
     # Get unique URL IDs as an ordered list
     urlids=[urlid for urlid in dict([(row[0],1) for row in rows])]
