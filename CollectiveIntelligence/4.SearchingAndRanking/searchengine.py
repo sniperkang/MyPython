@@ -17,15 +17,15 @@ class crawler:
   # Initialize the crawler with the name of database
   def __init__(self,dbname):
     self.con=sqlite.connect(dbname)
-  
+
   def __del__(self):
     self.con.close()
 
   def dbcommit(self):
     self.con.commit()
 
-  # 辅助函数，用于获取条目的id，并且如果条目不存在，就将其假如数据库中
-  # Auxilliary function for getting an entry id and adding 
+  # 辅助函数，用于获取条目的id，并且如果条目不存在，就将其加入数据库中
+  # Auxilliary function for getting an entry id and adding
   # it if it's not present
   def getentryid(self,table,field,value,createnew=True):
     cur=self.con.execute(
@@ -36,7 +36,7 @@ class crawler:
       "insert into %s (%s) values ('%s')" % (table,field,value))
       return cur.lastrowid
     else:
-      return res[0] 
+      return res[0]
 
 
   # 为每个网页建立索引
@@ -48,30 +48,39 @@ class crawler:
     #
     # Get the individual words
     text=self.gettextonly(soup)
+    #print text
     words=self.separatewords(text)
+    print words
 
     #
     # Get the URL id
     urlid=self.getentryid('urllist','url',url)
-    
+    print urlid
+
     # Link each word to this url
     for i in range(len(words)):
       word=words[i]
       if word in ignorewords: continue
       wordid=self.getentryid('wordlist','word',word)
+      print wordid
       self.con.execute("insert into wordlocation(urlid,wordid,location) values (%d,%d,%d)" % (urlid,wordid,i))
-  
+
 
   # 从一个HTML网页中提取文字（不带标签的）
   # Extract the text from an HTML page (no tags)
   def gettextonly(self,soup):
     v=soup.string
-    if v==Null:   
+    #print soup.contents
+    #print v
+    #if v==Null:
+    if v==None:
       c=soup.contents
       resulttext=''
       for t in c:
+        #print c
         subtext=self.gettextonly(t)
         resulttext+=subtext+'\n'
+      #print resulttext
       return resulttext
     else:
       return v.strip()
@@ -104,23 +113,32 @@ class crawler:
 
   # 从一小组网页开始进行广度优先搜索，直至某一给定深度，
   # 期间为网页建立索引
+  # 使用广度优先算法而不是递归 易于后续修改
+  # 并可以持续进行搜索，将未索引的网页列表保存，以备用
+  # 并避免栈溢出
   # Starting with a list of pages, do a breadth
   # first search to the given depth, indexing pages
   # as we go
   def crawl(self,pages,depth=2):
     for i in range(depth):
       newpages={}
+      #print pages
       for page in pages:
+        #print page
         try:
           c=urllib2.urlopen(page)
+          #print c
         except:
           print "Could not open %s" % page
           continue
         try:
           soup=BeautifulSoup(c.read())
+          #print soup
           self.addtoindex(page,soup)
-  
+
+          # 提取网页上的链接
           links=soup('a')
+          #print links
           for link in links:
             if ('href' in dict(link.attrs)):
               url=urljoin(page,link['href'])
@@ -130,17 +148,18 @@ class crawler:
                 newpages[url]=1
               linkText=self.gettextonly(link)
               self.addlinkref(page,url,linkText)
-  
+
           self.dbcommit()
         except:
           print "Could not parse page %s" % page
 
+      #将新发现的链接加入pages并继续循环直到深度为depth层
       pages=newpages
 
 
-  # 创建数据库
+  # 创建数据库并建立索引以加快搜索速度
   # Create the database tables
-  def createindextables(self): 
+  def createindextables(self):
     self.con.execute('create table urllist(url)')
     self.con.execute('create table wordlist(word)')
     self.con.execute('create table wordlocation(urlid,wordid,location)')
@@ -157,17 +176,17 @@ class crawler:
     # clear out the current page rank tables
     self.con.execute('drop table if exists pagerank')
     self.con.execute('create table pagerank(urlid primary key,score)')
-    
+
     # initialize every url with a page rank of 1
     for (urlid,) in self.con.execute('select rowid from urllist'):
       self.con.execute('insert into pagerank(urlid,score) values (%d,1.0)' % urlid)
     self.dbcommit()
-    
+
     for i in range(iterations):
       print "Iteration %d" % (i)
       for (urlid,) in self.con.execute('select rowid from urllist'):
         pr=0.15
-        
+
         # Loop through all the pages that link to this one
         for (linker,) in self.con.execute(
         'select distinct fromid from link where toid=%d' % urlid):
@@ -193,12 +212,12 @@ class searcher:
   def getmatchrows(self,q):
     # Strings to build the query
     fieldlist='w0.urlid'
-    tablelist=''  
+    tablelist=''
     clauselist=''
     wordids=[]
 
     # Split the words by spaces
-    words=q.split(' ')  
+    words=q.split(' ')
     tablenumber=0
 
     for word in words:
@@ -213,7 +232,7 @@ class searcher:
           clauselist+=' and '
           clauselist+='w%d.urlid=w%d.urlid and ' % (tablenumber-1,tablenumber)
         fieldlist+=',w%d.location' % tablenumber
-        tablelist+='wordlocation w%d' % tablenumber      
+        tablelist+='wordlocation w%d' % tablenumber
         clauselist+='w%d.wordid=%d' % (tablenumber,wordid)
         tablenumber+=1
 
@@ -229,7 +248,7 @@ class searcher:
     totalscores=dict([(row[0],0) for row in rows])
 
     # This is where we'll put our scoring functions
-    weights=[(1.0,self.locationscore(rows)), 
+    weights=[(1.0,self.locationscore(rows)),
              (1.0,self.frequencyscore(rows)),
              (1.0,self.pagerankscore(rows)),
              (1.0,self.linktextscore(rows,wordids)),
@@ -274,7 +293,7 @@ class searcher:
     for row in rows:
       loc=sum(row[1:])
       if loc<locations[row[0]]: locations[row[0]]=loc
-    
+
     return self.normalizescores(locations,smallIsBetter=1)
 
   def distancescore(self,rows):
@@ -291,7 +310,7 @@ class searcher:
 
   def inboundlinkscore(self,rows):
     uniqueurls=dict([(row[0],1) for row in rows])
-    inboundcount=dict([(u,self.con.execute('select count(*) from link where toid=%d' % u).fetchone()[0]) for u in uniqueurls])   
+    inboundcount=dict([(u,self.con.execute('select count(*) from link where toid=%d' % u).fetchone()[0]) for u in uniqueurls])
     return self.normalizescores(inboundcount)
 
   def linktextscore(self,rows,wordids):
