@@ -14,5 +14,5 @@ import searchengine
 
 crawler = searchengine.crawler('searchindex.db')
 crawler.createindextables()
-pages = ['https://en.wikipedia.org/wiki/Progarmming_language']
+pages = ['https://en.wikipedia.org/wiki/Programming_language']
 crawler.crawl(pages)

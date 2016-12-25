@@ -50,19 +50,19 @@ class crawler:
     text=self.gettextonly(soup)
     #print text
     words=self.separatewords(text)
-    print words
+    #print words
 
     #
     # Get the URL id
     urlid=self.getentryid('urllist','url',url)
-    print urlid
+    #print urlid
 
     # Link each word to this url
     for i in range(len(words)):
       word=words[i]
       if word in ignorewords: continue
       wordid=self.getentryid('wordlist','word',word)
-      print wordid
+      #print wordid
       self.con.execute("insert into wordlocation(urlid,wordid,location) values (%d,%d,%d)" % (urlid,wordid,i))
 
 
@@ -71,7 +71,7 @@ class crawler:
   def gettextonly(self,soup):
     v=soup.string
     #print soup.contents
-    #print v
+    print v
     #if v==Null:
     if v==None:
       c=soup.contents
@@ -146,7 +146,9 @@ class crawler:
               url=url.split('#')[0]  # remove location portion去掉位置部分
               if url[0:4]=='http' and not self.isindexed(url):
                 newpages[url]=1
+              #print link
               linkText=self.gettextonly(link)
+              print linkText
               self.addlinkref(page,url,linkText)
 
           self.dbcommit()
@@ -172,11 +174,14 @@ class crawler:
     self.con.execute('create index urlfromidx on link(fromid)')
     self.dbcommit()
 
+  # PageRank计算函数 提前计算 需更新时再运行
   def calculatepagerank(self,iterations=20):
+    # 清除当前的PageRank表
     # clear out the current page rank tables
     self.con.execute('drop table if exists pagerank')
     self.con.execute('create table pagerank(urlid primary key,score)')
 
+    # 初始化每个url 令其PageRank值为1
     # initialize every url with a page rank of 1
     for (urlid,) in self.con.execute('select rowid from urllist'):
       self.con.execute('insert into pagerank(urlid,score) values (%d,1.0)' % urlid)
@@ -187,13 +192,16 @@ class crawler:
       for (urlid,) in self.con.execute('select rowid from urllist'):
         pr=0.15
 
+        # 循环遍历指向当前网页的所有其他网页
         # Loop through all the pages that link to this one
         for (linker,) in self.con.execute(
         'select distinct fromid from link where toid=%d' % urlid):
+          # 得到链接源对应网页的PageRank值
           # Get the page rank of the linker
           linkingpr=self.con.execute(
           'select score from pagerank where urlid=%d' % linker).fetchone()[0]
 
+          # 根据链接源 求得总的链接数
           # Get the total number of links from the linker
           linkingcount=self.con.execute(
           'select count(*) from link where fromid=%d' % linker).fetchone()[0]
@@ -202,6 +210,7 @@ class crawler:
         'update pagerank set score=%f where urlid=%d' % (pr,urlid))
       self.dbcommit()
 
+# 搜索类
 class searcher:
   def __init__(self,dbname):
     self.con=sqlite.connect(dbname)
@@ -209,18 +218,23 @@ class searcher:
   def __del__(self):
     self.con.close()
 
+  # 接受查询字符串作为参数 并将其拆分为多个单词
+  # 并构造SQL查询 只查找包含所有不同单词的URL
   def getmatchrows(self,q):
+    # 构造查询的字符串
     # Strings to build the query
     fieldlist='w0.urlid'
     tablelist=''
     clauselist=''
     wordids=[]
 
+    # 根据空格拆分单词
     # Split the words by spaces
     words=q.split(' ')
     tablenumber=0
 
     for word in words:
+      # 获取单词ID
       # Get the word ID
       wordrow=self.con.execute(
       "select rowid from wordlist where word='%s'" % word).fetchone()
@@ -236,6 +250,7 @@ class searcher:
         clauselist+='w%d.wordid=%d' % (tablenumber,wordid)
         tablenumber+=1
 
+    # 根据各个组分 建立查询
     # Create the query from the separate parts
     fullquery='select %s from %s where %s' % (fieldlist,tablelist,clauselist)
     print fullquery
@@ -244,9 +259,11 @@ class searcher:
 
     return rows,wordids
 
+  # 接受查询请求 将获取到的行集置于字典中 并以格式化列表显示
   def getscoredlist(self,rows,wordids):
     totalscores=dict([(row[0],0) for row in rows])
 
+    # 评价函数
     # This is where we'll put our scoring functions
     weights=[(1.0,self.locationscore(rows)),
              (1.0,self.frequencyscore(rows)),
@@ -273,6 +290,7 @@ class searcher:
       print '%f\t%s' % (score,self.geturlname(urlid))
     return wordids,[r[1] for r in rankedscores[0:10]]
 
+  # 归一化函数 返回URL ID与数字评价值 0-1 1为最佳结果
   def normalizescores(self,scores,smallIsBetter=0):
     vsmall=0.00001 # Avoid division by zero errors
     if smallIsBetter:
@@ -283,11 +301,13 @@ class searcher:
       if maxscore==0: maxscore=vsmall
       return dict([(u,float(c)/maxscore) for (u,c) in scores.items()])
 
+  # 频度评价算法
   def frequencyscore(self,rows):
     counts=dict([(row[0],0) for row in rows])
     for row in rows: counts[row[0]]+=1
     return self.normalizescores(counts)
 
+  # 文档位置评价算法
   def locationscore(self,rows):
     locations=dict([(row[0],1000000) for row in rows])
     for row in rows:
@@ -296,6 +316,7 @@ class searcher:
 
     return self.normalizescores(locations,smallIsBetter=1)
 
+  # 单词距离评价算法
   def distancescore(self,rows):
     # If there's only one word, everyone wins!
     if len(rows[0])<=2: return dict([(row[0],1.0) for row in rows])
@@ -308,11 +329,13 @@ class searcher:
       if dist<mindistance[row[0]]: mindistance[row[0]]=dist
     return self.normalizescores(mindistance,smallIsBetter=1)
 
+  # 外部回指链接评价算法
   def inboundlinkscore(self,rows):
     uniqueurls=dict([(row[0],1) for row in rows])
     inboundcount=dict([(u,self.con.execute('select count(*) from link where toid=%d' % u).fetchone()[0]) for u in uniqueurls])
     return self.normalizescores(inboundcount)
 
+  # 链接文本评价算法
   def linktextscore(self,rows,wordids):
     linkscores=dict([(row[0],0) for row in rows])
     for wordid in wordids:
@@ -325,6 +348,7 @@ class searcher:
     normalizedscores=dict([(u,float(l)/maxscore) for (u,l) in linkscores.items()])
     return normalizedscores
 
+  # 从数据库中提取PageRank值并做归一化
   def pagerankscore(self,rows):
     pageranks=dict([(row[0],self.con.execute('select score from pagerank where urlid=%d' % row[0]).fetchone()[0]) for row in rows])
     maxrank=max(pageranks.values())
