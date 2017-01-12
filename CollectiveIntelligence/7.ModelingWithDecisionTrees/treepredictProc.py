@@ -14,4 +14,10 @@ import treepredict
 
 tree = treepredict.buildtree(treepredict.my_data)
 #print tree
+#treepredict.printtree(tree)
+#treepredict.drawtree(tree, jpeg='treeview.jpg')
+#print treepredict.classify(['(direct)', 'USA', 'yes', 5], tree)
+#treepredict.prune(tree, 0.1)
+#treepredict.printtree(tree)
+treepredict.prune(tree, 1)
 treepredict.printtree(tree)

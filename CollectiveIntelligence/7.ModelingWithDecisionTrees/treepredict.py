@@ -1,5 +1,13 @@
 # -*- coding: utf-8 -*-
 
+# 决策树的最大优势在可以轻易对一个受训模型给与解释
+# 进而帮助决策及策略调整（如广告投放）
+# 决策树可以同时接受分类和数值作为输入
+# 决策树允许数据的不确定性分配（数据缺失）
+# 根据返回值的统计量可判断可信度
+# 但是 决策树对数值型数据的处理只能进行大小比较
+# 决策树适合处理带分界点的由大量分类数据和数值共同组成的数据集
+# 决策树是商务分析、医疗决策和政策制定领域应用最广泛的数据挖掘方法
 my_data=[['slashdot','USA','yes',18,'None'],
         ['google','France','yes',23,'Premium'],
         ['digg','USA','yes',24,'Basic'],
@@ -119,10 +127,12 @@ def printtree(tree,indent=''):
       printtree(tree.fb,indent+'  ')
 
 
+# 获取树的宽度
 def getwidth(tree):
   if tree.tb==None and tree.fb==None: return 1
   return getwidth(tree.tb)+getwidth(tree.fb)
 
+# 获取树的深度
 def getdepth(tree):
   if tree.tb==None and tree.fb==None: return 0
   return max(getdepth(tree.tb),getdepth(tree.fb))+1
@@ -130,6 +140,7 @@ def getdepth(tree):
 
 from PIL import Image,ImageDraw
 
+# 绘制树
 def drawtree(tree,jpeg='tree.jpg'):
   w=getwidth(tree)*100
   h=getdepth(tree)*100+120
@@ -139,24 +150,30 @@ def drawtree(tree,jpeg='tree.jpg'):
 
   drawnode(draw,tree,w/2,20)
   img.save(jpeg,'JPEG')
-  
+
+# 绘制节点
 def drawnode(draw,tree,x,y):
   if tree.results==None:
+    # 得到每个分支的宽度
     # Get the width of each branch
     w1=getwidth(tree.fb)*100
     w2=getwidth(tree.tb)*100
 
+    # 确定此节点所要占据的总空间
     # Determine the total space required by this node
     left=x-(w1+w2)/2
     right=x+(w1+w2)/2
 
+    # 绘制判断条件字符串
     # Draw the condition string
     draw.text((x-20,y-10),str(tree.col)+':'+str(tree.value),(0,0,0))
 
+    # 绘制到分支的连线
     # Draw links to the branches
     draw.line((x,y,left+w1/2,y+100),fill=(255,0,0))
     draw.line((x,y,right-w2/2,y+100),fill=(255,0,0))
-    
+
+    # 绘制分支的节点
     # Draw the branch nodes
     drawnode(draw,tree.fb,left+w1/2,y+100)
     drawnode(draw,tree.tb,right-w2/2,y+100)
@@ -165,6 +182,8 @@ def drawnode(draw,tree,x,y):
     draw.text((x-20,y),txt,(0,0,0))
 
 
+# 对新观测数据进行分类
+# 采用与printtree相同的方式对树进行遍历
 def classify(observation,tree):
   if tree.results!=None:
     return tree.results
@@ -179,31 +198,45 @@ def classify(observation,tree):
       else: branch=tree.fb
     return classify(observation,branch)
 
+# 剪枝函数 先构造好整个树 然后消除多余节点
+# 具有相同父节点的节点如果合并 熵增加是否小于阈值
+# 可避免过度拟合 提高普遍性 不至于使树过于特殊
+#
 def prune(tree,mingain):
+  # 如果分支不是叶节点 则对其进行剪枝操作
+  # 通过递归 从根节点开始遍历
   # If the branches aren't leaves, then prune them
   if tree.tb.results==None:
     prune(tree.tb,mingain)
   if tree.fb.results==None:
     prune(tree.fb,mingain)
-    
+
+  # 如果两个子分支都是叶节点，则判断他们是否须要合并
   # If both the subbranches are now leaves, see if they
   # should merged
   if tree.tb.results!=None and tree.fb.results!=None:
+    # 构造合并后的数据集
     # Build a combined dataset
     tb,fb=[],[]
     for v,c in tree.tb.results.items():
       tb+=[[v]]*c
     for v,c in tree.fb.results.items():
       fb+=[[v]]*c
-    
+
+    # 检查熵的减少情况
     # Test the reduction in entropy
     delta=entropy(tb+fb)-(entropy(tb)+entropy(fb)/2)
 
     if delta<mingain:
+      # 合并分支
       # Merge the branches
       tree.tb,tree.fb=None,None
       tree.results=uniquecounts(tb+fb)
 
+# 处理缺失值 对于缺失值 选择两个分支都走
+# 对各分支结果进行加权统计
+# 分支权重值为位于该分支的其他数据所占的比重
+# 如果有重要数据缺失 则计算所有分支对应结果值并乘以各自权重
 def mdclassify(observation,tree):
   if tree.results!=None:
     return tree.results
@@ -228,6 +261,8 @@ def mdclassify(observation,tree):
         else: branch=tree.fb
       return mdclassify(observation,branch)
 
+# 处理数值型结果 使用方差作为评价函数取代熵或基尼不纯度
+# 以充分表达数字之间距离的影响 而不单单是分类
 def variance(rows):
   if len(rows)==0: return 0
   data=[float(row[len(row)-1]) for row in rows]
