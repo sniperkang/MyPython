@@ -10,7 +10,9 @@ domin = [(0, 9)] * (len(optimization.people) * 2)
 #print len(optimization.people)
 #print domin
 #s = optimization.randomoptimize(domin, optimization.schedulecost)
-s = optimization.hillclimb(domin, optimization.schedulecost)
+#s = optimization.hillclimb(domin, optimization.schedulecost)
+#s = optimization.annealingoptimize(domin, optimization.schedulecost)
+s = optimization.geneticoptimize(domin, optimization.schedulecost)
 #print s
 print optimization.schedulecost(s)
 optimization.printschedule(s)

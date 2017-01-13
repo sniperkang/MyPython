@@ -17,6 +17,7 @@ prefs=[('Toby', ('Bacchus', 'Hercules')),
        ('James', ('Hercules', 'Athena'))]
 
 # [(0,9),(0,8),(0,7),(0,6),...,(0,0)]
+# 搜索的定义域
 domain=[(0,(len(dorms)*2)-i-1) for i in range(0,len(dorms)*2)]
 
 def printsolution(vec):
