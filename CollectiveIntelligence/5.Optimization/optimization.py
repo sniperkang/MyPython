@@ -176,7 +176,7 @@ def hillclimb(domain,costf):
   return sol
 
 # 模拟退火算法
-def annealingoptimize(domain,costf,T=10000.0,cool=0.95,step=3):
+def annealingoptimize(domain,costf,T=10000.0,cool=0.95,step=1):
   # Initialize the values randomly
   # 随机初始化值
   vec=[float(random.randint(domain[i][0],domain[i][1]))
